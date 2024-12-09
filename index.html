@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Photo Sharing with Firebase</title>
+
+  <!-- Firebase Compatibility Scripts -->
+  <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/9.16.0/firebase-database-compat.js"></script>
+
+  <!-- Tailwind CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.19/dist/full.min.css" rel="stylesheet" type="text/css" />
+  <script src="https://cdn.tailwindcss.com"></script>
+
+</head>
+
+<body class="bg-gray-100 text-black font-sans min-h-screen flex flex-col items-center">
+
+
+
+
+  <div class="navbar bg-gray-700 ">
+    <div class="flex-1">
+      <a class="btn btn-ghost text-xl">~DoroShare~</a>
+    </div>
+    <div class="flex-none gap-2">
+      <div class="form-control">
+        <input type="text" placeholder="Search" class="input input-bordered w-24 md:w-auto" />
+      </div>
+      <div class="dropdown dropdown-end">
+        <div tabindex="0" role="button" class="btn btn-ghost btn-circle avatar">
+          <div class="w-10 rounded-full">
+            <!-- Profile Picture -->
+            <img id="userProfilePic" alt="Your image" class="hidden w-14 h-14 rounded-full object-cover" />
+
+          </div>
+        </div>
+        <ul tabindex="0" class="menu menu-sm dropdown-content bg-slate-300 rounded-box z-[1] mt-3 w-52 p-2 shadow">
+          <li>
+            <a class="justify-between">
+              Log In
+            </a>
+          </li>
+          <li><a href="">See posts</a></li>
+          <li><a id="signOutBtn">Logout</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- Button to sign in with Google -->
+  <button id="googleSignInBtn" class="btn mt-4 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg">
+    Sign In with Google
+  </button>
+
+
+  <!-- Button to sign out -->
+  <button id="signOutBtn"
+    class="btn mt-4 bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg hidden transition-all">
+    Sign Out
+  </button>
+
+  <!-- Upload Section -->
+  <div id="uploadSection" class="mt-6 p-4 bg-slate-200 shadow-lg rounded-md w-full max-w-md mx-auto hidden">
+
+
+    <label class="input input-bordered flex items-center gap-2 bg-white">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" fill="currentColor" class="h-4 w-4 opacity-70">
+        <path
+          d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6ZM12.735 14c.618 0 1.093-.561.872-1.139a6.002 6.002 0 0 0-11.215 0c-.22.578.254 1.139.872 1.139h9.47Z" />
+      </svg>
+      <input id="username" type="text" class="grow text-blue-700" placeholder="Username" readonly />
+    </label>
+
+
+
+
+
+
+    <!-- Input for Image Title -->
+    <label class="block mb-4">
+      <span class="text-lg font-semibold text-gray-800">Enter Image Title</span>
+      <input id="imageTitle" type="text" placeholder="Enter a title for the image"
+        class="mt-2 block w-full p-2 border rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white">
+    </label>
+
+    <!-- Input for Selecting an Image -->
+    <label class="block mb-4">
+      <span class="text-lg font-semibold text-gray-800">Select an Image to Upload</span>
+      <input type="file" id="fileInput" accept="image/*"
+        class="mt-2 block w-full text-base text-gray-900 border rounded-lg cursor-pointer bg-gray-50 p-2 shadow-sm">
+    </label>
+
+    <!-- Image Preview -->
+    <img id="preview" class="w-full max-h-60 object-cover rounded-md shadow-md mt-4 hidden" alt="Image Preview">
+
+    <!-- Upload Button -->
+    <button id="uploadBtn"
+      class="btn btn-primary w-full mt-4 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-all disabled:bg-gray-400"
+      disabled>
+      Upload
+    </button>
+  </div>
+
+  <!-- Container to display photos -->
+  <div id="photos" class="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 p-2">
+  </div>
+
+
+
+  <script>
+    // Firebase configuration
+    const firebaseConfig = {
+      apiKey: "AIzaSyDSWMPmzwyRoJf6ymBA56sqEu0hZRPXAFA",
+      authDomain: "dorochat-830bb.firebaseapp.com",
+      databaseURL: "https://dorochat-830bb-default-rtdb.firebaseio.com",
+      projectId: "dorochat-830bb",
+      storageBucket: "dorochat-830bb.appspot.com",
+      messagingSenderId: "390410096076",
+      appId: "1:390410096076:web:ef0cb4978c93b6be96a169"
+    };
+
+    // Initialize Firebase
+    const app = firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    const googleSignInBtn = document.getElementById("googleSignInBtn");
+    const signOutBtn = document.getElementById("signOutBtn");
+    const uploadSection = document.getElementById("uploadSection");
+
+
+
+    // Initialize Firebase Authentication
+    const auth = firebase.auth();
+
+    // Maintain Authentication State Across Page Reloads
+    auth.onAuthStateChanged((user) => {
+      if (user) {
+        console.log("User is signed in:", user.email);
+
+        // Populate the username input with the user's display name
+        const usernameInput = document.getElementById("username");
+        if (user.displayName) {
+          usernameInput.value = user.displayName;
+        } else {
+          usernameInput.value = user.email;  // Fallback to email if displayName is not set
+        }
+
+        // Display Google account profile picture
+        const userProfilePic = document.getElementById("userProfilePic");
+        if (user.photoURL) {
+          userProfilePic.src = user.photoURL;
+          userProfilePic.classList.remove('hidden');
+        }
+
+        googleSignInBtn.classList.add('hidden');
+        signOutBtn.classList.remove('hidden');
+        uploadSection.classList.remove('hidden');
+        loadPhotos();
+      } else {
+        console.log("No user is signed in.");
+        googleSignInBtn.classList.remove('hidden');
+        signOutBtn.classList.add('hidden');
+        uploadSection.classList.add('hidden');
+        const userProfilePic = document.getElementById("userProfilePic");
+        userProfilePic.classList.add('hidden');
+        const usernameInput = document.getElementById("username");
+        usernameInput.value = "";
+      }
+    });
+
+
+
+
+
+
+
+
+    // Sign in with Google
+    googleSignInBtn.addEventListener("click", () => {
+      const provider = new firebase.auth.GoogleAuthProvider();
+      auth.signInWithPopup(provider)
+        .then((result) => {
+          console.log("Signed in with Google:", result.user.email);
+          googleSignInBtn.classList.add('hidden');
+          signOutBtn.classList.remove('hidden');
+          uploadSection.classList.remove('hidden');
+          loadPhotos();
+        }).catch((error) => console.error("Google Sign-In Error:", error));
+    });
+
+    // Sign out
+    signOutBtn.addEventListener("click", () => {
+      auth.signOut()
+        .then(() => {
+          console.log("Signed out successfully.");
+          googleSignInBtn.classList.remove('hidden');
+          signOutBtn.classList.add('hidden');
+          uploadSection.classList.add('hidden');
+        }).catch((error) => console.error("Sign-Out Error:", error));
+    });
+
+    // Upload Photos Section
+    const fileInput = document.getElementById("fileInput");
+    const preview = document.getElementById("preview");
+    const uploadBtn = document.getElementById("uploadBtn");
+    const imageTitleInput = document.getElementById("imageTitle");
+
+    fileInput.addEventListener("change", (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          preview.src = e.target.result;
+          preview.classList.remove("hidden");
+          uploadBtn.disabled = false;
+        };
+        reader.readAsDataURL(file);
+      }
+    });
+
+    uploadBtn.addEventListener("click", () => {
+      const file = fileInput.files[0];
+      const title = imageTitleInput.value.trim();
+      const user = auth.currentUser;
+
+      if (!file || !title || !user) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const base64String = e.target.result;
+
+        // Push data to the database
+        database.ref("photos").push({
+          image: base64String,
+          title: title,
+          username: user.displayName ? user.displayName : user.email, // Include username
+          timestamp: Date.now(),
+          likes: 0
+        });
+
+        alert("Image and title uploaded successfully!");
+
+        // Reset input fields
+        fileInput.value = "";
+        imageTitleInput.value = "";
+        preview.src = "";
+        preview.classList.add("hidden");
+        uploadBtn.disabled = true;
+
+        loadPhotos(); // Reload photos to reflect new changes
+      };
+
+      reader.readAsDataURL(file);
+    });
+
+
+  </script>
+
+  <style>
+    .btn {
+      padding: 10px;
+      font-weight: bold;
+      transition: all 0.3s;
+    }
+
+    .btn:hover {
+      transform: scale(1.05);
+    }
+
+    .btn-error {
+      background-color: red;
+    }
+
+    .btn-primary {
+      background-color: blue;
+      color: white;
+    }
+
+    .btn:hover {
+      opacity: 0.9;
+    }
+  </style>
+</body>
+
+</html>
